@@ -23,7 +23,7 @@ materialize more than one `[B, T, S]` buffer.
 - **Banded alignment in compact storage.** Pass a `[B, T, 2]` band and a
   `[B, T, W]` cost tensor: memory scales with the band width `W`, not with
   `S`, and only in-band cells are evaluated.
-- **Exact and well-tested.** 380+ tests (with a CUDA GPU) against an independent float64
+- **Exact and well-tested.** ~600 test cases (CPU plus two GPUs) against an independent float64
   reference: values, gradients, `torch.autograd.gradcheck`, CPU/CUDA parity,
   band construction vs. `pyts`, invariances (permutation, padding,
   `gamma → 0` → hard DTW), half / bfloat16, non-contiguous inputs.
@@ -140,10 +140,12 @@ Numbers are specific to this machine.
 | 256 | 512 | 0.702 | 100 | **142×** | 3.55 | 100 | **28×** |
 | 256 | 1024 | 2.41 | 402 | **167×** | 13.8 | 403 | **29×** |
 
-**Large batch, narrow Sakoe-Chiba band** (`B = 554`, `T ≤ 40`, `S ≤ 128`,
-window 2, variable lengths): fwd 0.069 ms vs 0.333 ms (**4.8×**), fwd+bwd
-0.147 ms vs 0.332 ms (**2.3×**). At this size (≈ 0.1 M cells) launch latency
-dominates.
+**Large batch, narrow Sakoe-Chiba band** (`B = 512`, `T ≤ 64`, `S ≤ 160`,
+window 4, variable lengths, `gamma = 0.1`, `warp_penalty = 1`): fwd 0.079 ms
+vs 0.359 ms (**4.6×**), fwd+bwd 0.168 ms vs 0.369 ms (**2.2×**). At this size
+(≈ 0.2 M cells) launch latency dominates, and timings of such short kernels
+vary with the GPU clock state (up to ~2× faster when the GPU is already
+boosted).
 
 **Long sequences** (no length cap):
 
