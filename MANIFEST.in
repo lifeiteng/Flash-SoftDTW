@@ -1,0 +1,4 @@
+include LICENSE README.md README.zh-CN.md
+recursive-include csrc *.h *.cpp *.cu
+recursive-include tests *.py
+recursive-include benchmarks *.py

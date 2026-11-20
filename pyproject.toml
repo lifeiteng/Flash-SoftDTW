@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=77", "wheel", "torch>=2.1", "ninja"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# NOTE: the PyPI distribution name is not final yet ("flash-softdtw" is taken).
+name = "softdtw-flash"
+version = "0.1.0"
+description = "Fast, memory-lean soft-DTW for PyTorch (CUDA + CPU), with banded alignment."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Feiteng Li" }]
+dependencies = ["torch>=2.1"]
+keywords = ["soft-dtw", "dtw", "dynamic time warping", "cuda", "pytorch", "alignment"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++",
+    "Environment :: GPU :: NVIDIA CUDA",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "numpy"]
+
+[tool.setuptools]
+packages = ["flash_softdtw"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
