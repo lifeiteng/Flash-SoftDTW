@@ -125,3 +125,23 @@ def test_long_sequences_match_cpu(banded):
     assert torch.isfinite(values[0]).all()
     torch.testing.assert_close(values[1], values[0], rtol=1e-10, atol=1e-8)
     torch.testing.assert_close(grads[1], grads[0], rtol=1e-8, atol=1e-10)
+
+
+@pytest.mark.parametrize("channels", [1, 3, 37])
+def test_pairwise_l1_matches_cdist(device, channels, monkeypatch):
+    from flash_softdtw import loss as loss_mod
+
+    # A tiny chunk budget exercises the multi-chunk path too.
+    monkeypatch.setattr(loss_mod, "_L1_CHUNK_ELEMENTS", 50)
+    x = torch.randn(2, 7, channels, dtype=torch.float64, device=device, requires_grad=True)
+    y = torch.randn(2, 5, channels, dtype=torch.float64, device=device, requires_grad=True)
+    ours = fsd.pairwise_cost(x, y, "l1")
+    ref = torch.cdist(x, y, p=1.0)
+    torch.testing.assert_close(ours, ref)
+    g = torch.randn_like(ref)
+    gx, gy = torch.autograd.grad(ours, (x, y), g)
+    rx, ry = torch.autograd.grad(ref, (x, y), g)
+    torch.testing.assert_close(gx, rx)
+    torch.testing.assert_close(gy, ry)
+    assert torch.autograd.gradcheck(lambda a, b: fsd.pairwise_cost(a, b, "l1"),
+                                    (x.detach().requires_grad_(), y.detach().requires_grad_()))

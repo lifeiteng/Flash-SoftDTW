@@ -23,6 +23,62 @@ def _cosine(x: Tensor, y: Tensor) -> Tensor:
     )
 
 
+# Elements of the [B, T, S, chunk] temporary built per channel chunk.
+_L1_CHUNK_ELEMENTS = 1 << 26
+
+
+def _channel_chunks(x: Tensor, y: Tensor):
+    B, T, C = x.shape
+    S = y.size(1)
+    step = max(1, min(C, _L1_CHUNK_ELEMENTS // max(1, B * T * S)))
+    return range(0, C, step), step
+
+
+class _PairwiseL1(torch.autograd.Function):
+    """sum_c |x[b, t, c] - y[b, s, c]| without torch.cdist.
+
+    torch.cdist(p=1) is a generic kernel whose forward and backward dominate the
+    end-to-end time at large B * T * S. Here the distance is accumulated over
+    channel chunks with plain broadcasting, and the backward pass reduces
+    sign(x - y) weighted by the incoming gradient, chunk by chunk.
+    """
+
+    @staticmethod
+    def forward(ctx, x, y):
+        ctx.save_for_backward(x, y)
+        starts, step = _channel_chunks(x, y)
+        out = x.new_zeros(x.size(0), x.size(1), y.size(1))
+        for c in starts:
+            xs, ys = x[..., c : c + step], y[..., c : c + step]
+            if xs.size(-1) == 1:
+                out += (xs - ys.transpose(1, 2)).abs_()
+            else:
+                out += (xs.unsqueeze(2) - ys.unsqueeze(1)).abs_().sum(-1)
+        return out
+
+    @staticmethod
+    def backward(ctx, grad):
+        x, y = ctx.saved_tensors
+        gx = torch.zeros_like(x) if ctx.needs_input_grad[0] else None
+        gy = torch.zeros_like(y) if ctx.needs_input_grad[1] else None
+        starts, step = _channel_chunks(x, y)
+        for c in starts:
+            xs, ys = x[..., c : c + step], y[..., c : c + step]
+            if xs.size(-1) == 1:
+                weighted = (xs - ys.transpose(1, 2)).sign_().mul_(grad)  # [B, T, S]
+                if gx is not None:
+                    gx[..., c] = weighted.sum(2)
+                if gy is not None:
+                    gy[..., c] = -weighted.sum(1)
+            else:
+                weighted = (xs.unsqueeze(2) - ys.unsqueeze(1)).sign_().mul_(grad.unsqueeze(-1))
+                if gx is not None:
+                    gx[..., c : c + step] = weighted.sum(2)
+                if gy is not None:
+                    gy[..., c : c + step] = -weighted.sum(1)
+        return gx, gy
+
+
 def _inner(x: Tensor, y: Tensor) -> Tensor:
     """Batched x @ y^T; one-dimensional features use a broadcast product
     (some PyTorch builds route K=1 bmm to a fragile outer-product kernel)."""
@@ -34,7 +90,7 @@ def _inner(x: Tensor, y: Tensor) -> Tensor:
 def _dense_cost(x: Tensor, y: Tensor, metric: Metric) -> Tensor:
     if callable(metric):
         return metric(x.unsqueeze(2), y.unsqueeze(1))
-    if metric in ("l1", "euclidean") and x.dtype in (torch.float16, torch.bfloat16):
+    if metric == "euclidean" and x.dtype in (torch.float16, torch.bfloat16):
         # torch.cdist has no half-precision kernels; compute in float32.
         return _dense_cost(x.float(), y.float(), metric).to(x.dtype)
     if metric == "sqeuclidean":
@@ -44,7 +100,9 @@ def _dense_cost(x: Tensor, y: Tensor, metric: Metric) -> Tensor:
     if metric == "euclidean":
         return torch.cdist(x, y, p=2.0)
     if metric == "l1":
-        return torch.cdist(x, y, p=1.0)
+        if x.dtype in (torch.float16, torch.bfloat16):
+            return _PairwiseL1.apply(x.float(), y.float()).to(x.dtype)
+        return _PairwiseL1.apply(x, y)
     if metric == "cosine":
         xn, yn = _cosine(x, y)
         return 1 - _inner(xn, yn)
