@@ -106,7 +106,7 @@ band or the stored tensor, the value is `+inf` and the gradient is zero.
 |---|---|
 | `soft_dtw(cost, x_lens=None, y_lens=None, *, band=None, gamma=1.0, warp_penalty=0.0)` | Differentiable soft-DTW values `[B]` of `[B, T, S]` (dense) or `[B, T, W]` (compact band) costs. Any float dtype; half / bf16 accumulate in fp32. |
 | `SoftDTWLoss(gamma, metric, window, warp_penalty, normalize, reduction)` | `nn.Module` taking feature sequences `x [B, T, C]`, `y [B, S, C]` and optional lengths. |
-| `pairwise_cost(x, y, metric, band=None)` | `"sqeuclidean"`, `"euclidean"`, `"l1"`, `"cosine"` or a callable; dense or compact band layout. |
+| `pairwise_cost(x, y, metric, band=None)` | `"sqeuclidean"`, `"euclidean"`, `"l1"`, `"cosine"` or a callable; dense or compact band layout. `"sqeuclidean"` / `"cosine"` use matrix multiplies; `"l1"` uses a dedicated broadcast kernel pair (not `torch.cdist`), whose cost grows with the feature dimension, so prefer `"sqeuclidean"` for wide features. |
 | `sakoe_chiba_band(x_lens, y_lens, window)` | Per-row `[begin, end)` columns of a Sakoe-Chiba band along the (non-square) diagonal. |
 | `band_width`, `band_columns`, `gather_band` | Helpers for compact band storage. |
 

@@ -79,7 +79,7 @@ softmin_γ(a, b, c) = -γ · log(e^{-a/γ} + e^{-b/γ} + e^{-c/γ})
 |---|---|
 | `soft_dtw(cost, x_lens=None, y_lens=None, *, band=None, gamma=1.0, warp_penalty=0.0)` | 对 `[B, T, S]`（稠密）或 `[B, T, W]`（紧凑带状）代价张量计算可微的 soft-DTW 值 `[B]`。支持任意浮点 dtype；half / bf16 在内部以 fp32 累加。 |
 | `SoftDTWLoss(gamma, metric, window, warp_penalty, normalize, reduction)` | `nn.Module`，接收特征序列 `x [B, T, C]`、`y [B, S, C]` 以及可选的序列长度。 |
-| `pairwise_cost(x, y, metric, band=None)` | 支持 `"sqeuclidean"`、`"euclidean"`、`"l1"`、`"cosine"` 或自定义可调用对象；支持稠密或紧凑带状布局。 |
+| `pairwise_cost(x, y, metric, band=None)` | 支持 `"sqeuclidean"`、`"euclidean"`、`"l1"`、`"cosine"` 或自定义可调用对象；支持稠密或紧凑带状布局。`"sqeuclidean"` / `"cosine"` 基于矩阵乘法；`"l1"` 使用专门的广播实现（不走 `torch.cdist`），耗时随特征维度增长，特征维度较大时建议用 `"sqeuclidean"`。 |
 | `sakoe_chiba_band(x_lens, y_lens, window)` | 生成沿（非方阵）对角线的 Sakoe-Chiba 带中每一行的 `[begin, end)` 列范围。 |
 | `band_width`, `band_columns`, `gather_band` | 用于紧凑带状存储的辅助函数。 |
 
