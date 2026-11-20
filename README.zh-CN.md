@@ -15,7 +15,7 @@ Flash-SoftDTW 用于计算成批代价矩阵（cost matrices）的软动态时�
 
 ## 安装
 
-环境要求：PyTorch ≥ 2.1、与当前 PyTorch 构建兼容的 C++ 编译器，以及与 PyTorch 构建匹配的 CUDA Toolkit（用于编译 GPU kernel）。
+环境要求：PyTorch（已在 2.13 + CUDA 12.9 与 2.15 CPU 上测试）、`ninja`、`setuptools >= 77`、PyTorch 构建所支持的 C++ 编译器；编译 GPU kernel 还需与 PyTorch 构建版本匹配的 CUDA Toolkit。
 
 ```bash
 git clone https://github.com/lifeiteng/Flash-SoftDTW.git
@@ -87,7 +87,7 @@ band 的列范围沿 `T` 维必须非递减（Sakoe-Chiba 带以及任何单调�
 
 ## 基准测试
 
-测试环境：RTX PRO 6000 Blackwell Max-Q (sm_120)，PyTorch 2.13 + CUDA 12.9，fp32，`gamma = 0.05`，`warp_penalty = 10`。使用 CUDA Event 计时，预热后取 10 次运行的中位数，期间 GPU 无其他负载。不含代价矩阵构建时间。Baseline 为逐行顺序执行的 CUDA soft-DTW kernel，在单次扫描中同时计算函数值与梯度（因此其前向耗时与前向+反向耗时相同）。具体数值取决于测试机型。
+测试环境：RTX PRO 6000 Blackwell Max-Q (sm_120)，PyTorch 2.13 + CUDA 12.9，fp32，`gamma = 0.05`，`warp_penalty = 10`。使用 CUDA Event 计时，预热后取 10 次运行的中位数，期间 GPU 无其他负载。不含代价矩阵构建时间。Baseline 为早期的逐行顺序 CUDA soft-DTW 实现（不包含在本仓库中），在单次扫描中同时计算函数值与梯度，因此其前向耗时与前向+反向耗时相同。具体数值取决于测试机型。
 
 **稠密场景，`T = S`**（单位：毫秒）：
 
@@ -115,7 +115,7 @@ band 的列范围沿 `T` 维必须非递减（Sakoe-Chiba 带以及任何单调�
 | 8 | 4096 | 14.0 ms | 66.3 ms | 1.0 GiB |
 | 64 | 4096 | 15.2 ms | 72.2 ms | 8.0 GiB |
 
-可通过 `python benchmarks/bench.py`（添加 `--legacy-dir` 可对基线扩展计时；详见脚本 `--help`）和 `python benchmarks/long_sequences.py` 复现。
+`python benchmarks/bench.py` 与 `python benchmarks/long_sequences.py` 可在你的 GPU 上复现上表中 Flash-SoftDTW 一侧的结果。
 
 ## 工作原理
 
