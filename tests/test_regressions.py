@@ -101,3 +101,27 @@ def test_invalid_scalars_are_rejected(device, gamma, warp):
     cost = torch.rand(1, 3, 3, device=device)
     with pytest.raises((RuntimeError, ValueError)):
         fsd.soft_dtw(cost, gamma=gamma, warp_penalty=warp)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
+@pytest.mark.parametrize("banded", [False, True])
+def test_long_sequences_match_cpu(banded):
+    """Lengths well beyond 1024 and not multiples of the strip height."""
+    gen = torch.Generator().manual_seed(2500)
+    x_lens = torch.tensor([2500, 1731])
+    y_lens = torch.tensor([2300, 2047])
+    band = fsd.sakoe_chiba_band(x_lens, y_lens, 40) if banded else None
+    width = fsd.band_width(band) if banded else 2300
+    cost = torch.rand(2, 2500, width, generator=gen, dtype=torch.float64)
+    values, grads = [], []
+    for device in ("cpu", "cuda"):
+        leaf = cost.to(device).requires_grad_()
+        value = fsd.soft_dtw(leaf, x_lens.to(device), y_lens.to(device),
+                             band=None if band is None else band.to(device), gamma=0.2,
+                             warp_penalty=0.1)
+        grad, = torch.autograd.grad(value.sum(), leaf)
+        values.append(value.cpu())
+        grads.append(grad.cpu())
+    assert torch.isfinite(values[0]).all()
+    torch.testing.assert_close(values[1], values[0], rtol=1e-10, atol=1e-8)
+    torch.testing.assert_close(grads[1], grads[0], rtol=1e-8, atol=1e-10)

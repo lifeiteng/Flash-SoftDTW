@@ -34,8 +34,9 @@ materialize more than one `[B, T, S]` buffer.
 
 ## Installation
 
-Requirements: PyTorch ≥ 2.1, a C++ compiler supported by your PyTorch build,
-and the CUDA toolkit matching your PyTorch build for the GPU kernels.
+Requirements: PyTorch (tested with 2.13 + CUDA 12.9 and 2.15 CPU), `ninja`,
+`setuptools >= 77`, a C++ compiler supported by your PyTorch build, and the
+CUDA toolkit matching your PyTorch build for the GPU kernels.
 
 ```bash
 git clone https://github.com/lifeiteng/Flash-SoftDTW.git
@@ -120,8 +121,9 @@ matters for extreme `gamma` / cost combinations.
 RTX PRO 6000 Blackwell Max-Q (sm_120), PyTorch 2.13 + CUDA 12.9, fp32,
 `gamma = 0.05`, `warp_penalty = 10`. CUDA-event timing, median of 10 runs
 after warm-up, GPU otherwise idle. Cost construction is not timed. The
-baseline is a row-sequential CUDA soft-DTW kernel that computes value and
-gradient in one pass (so its forward and forward+backward times coincide).
+baseline is an earlier row-sequential CUDA soft-DTW implementation (not part
+of this repository) that computes value and gradient in one pass, so its
+forward and forward+backward times coincide.
 Numbers are specific to this machine.
 
 **Dense, `T = S`** (milliseconds):
@@ -153,9 +155,8 @@ dominates.
 | 8 | 4096 | 14.0 ms | 66.3 ms | 1.0 GiB |
 | 64 | 4096 | 15.2 ms | 72.2 ms | 8.0 GiB |
 
-Reproduce with `python benchmarks/bench.py` (add `--legacy-dir` to time a
-baseline extension; see the script's `--help`) and
-`python benchmarks/long_sequences.py`.
+`python benchmarks/bench.py` and `python benchmarks/long_sequences.py`
+reproduce the Flash-SoftDTW side of these tables on your GPU.
 
 ## How it works
 
