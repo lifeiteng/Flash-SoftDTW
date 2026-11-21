@@ -87,8 +87,6 @@ def test_cosine_dense_matches_banded_near_zero(device):
 @pytest.mark.parametrize("metric", ["l1", "euclidean", "sqeuclidean", "cosine"])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 def test_loss_accepts_half_precision_features(device, metric, dtype):
-    if device.type == "cpu" and dtype == torch.float16 and metric in ("sqeuclidean", "cosine"):
-        pytest.skip("CPU float16 matmul is not universally available")
     x = torch.randn(2, 6, 4, device=device).to(dtype).requires_grad_()
     y = torch.randn(2, 5, 4, device=device).to(dtype)
     loss = fsd.SoftDTWLoss(gamma=0.5, metric=metric)(x, y)
