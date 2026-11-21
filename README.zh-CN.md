@@ -17,6 +17,8 @@ Flash-SoftDTW 用于计算成批代价矩阵（cost matrices）的软动态时�
 
 环境要求：PyTorch（已在 2.13 + CUDA 12.9 与 2.15 CPU 上测试）、`ninja`、`setuptools >= 77`、PyTorch 构建所支持的 C++ 编译器；编译 GPU kernel 还需与 PyTorch 构建版本匹配的 CUDA Toolkit。
 
+PyPI 包名为 `flash-softdtw-torch`（import 名为 `flash_softdtw`），与 PyPI 上的 `flash-softdtw` 包无关；两者 import 名相同，请勿安装在同一环境中。从源码编译安装：
+
 ```bash
 git clone https://github.com/lifeiteng/Flash-SoftDTW.git
 cd Flash-SoftDTW

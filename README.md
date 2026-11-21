@@ -38,6 +38,10 @@ Requirements: PyTorch (tested with 2.13 + CUDA 12.9 and 2.15 CPU), `ninja`,
 `setuptools >= 77`, a C++ compiler supported by your PyTorch build, and the
 CUDA toolkit matching your PyTorch build for the GPU kernels.
 
+The PyPI package is `flash-softdtw-torch` (import name `flash_softdtw`). It
+is unrelated to the `flash-softdtw` package on PyPI; do not install both into
+one environment, as they share the import name. To build from source:
+
 ```bash
 git clone https://github.com/lifeiteng/Flash-SoftDTW.git
 cd Flash-SoftDTW

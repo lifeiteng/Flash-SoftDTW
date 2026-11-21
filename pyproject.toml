@@ -3,8 +3,8 @@ requires = ["setuptools>=77", "wheel", "torch>=2.1", "ninja"]
 build-backend = "setuptools.build_meta"
 
 [project]
-# NOTE: the PyPI distribution name is not final yet ("flash-softdtw" is taken).
-name = "softdtw-flash"
+# PyPI distribution name; the import name is `flash_softdtw`.
+name = "flash-softdtw-torch"
 version = "0.1.0"
 description = "Fast, memory-lean soft-DTW for PyTorch (CUDA + CPU), with banded alignment."
 readme = "README.md"
