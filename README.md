@@ -1,8 +1,10 @@
 # Flash-SoftDTW
 
+![Flash-SoftDTW](https://raw.githubusercontent.com/lifeiteng/Flash-SoftDTW/main/docs/images/banner.jpg)
+
 **Fast, memory-lean, exact soft-DTW for PyTorch — CUDA and CPU, dense and banded, forward and backward.**
 
-[中文文档](README.zh-CN.md)
+[中文文档](https://github.com/lifeiteng/Flash-SoftDTW/blob/main/README.zh-CN.md)
 
 Flash-SoftDTW computes the soft dynamic time warping value of a batch of cost
 matrices and its exact gradient (the expected alignment). It is built for
@@ -31,6 +33,9 @@ materialize more than one `[B, T, S]` buffer.
   of `inf` (no NaNs from `inf - inf`), and a backward pass that normalizes the
   predecessor weights directly instead of using `R - cost`, which loses
   precision for small `gamma`.
+
+<p align="center"><img src="https://raw.githubusercontent.com/lifeiteng/Flash-SoftDTW/main/docs/images/soft_alignment.png" width="92%" alt="Soft alignment computed by Flash-SoftDTW"></p>
+<p align="center"><sub>Expected alignment (the gradient of soft-DTW w.r.t. the cost matrix) of two warped signals, dense and inside a Sakoe-Chiba band.</sub></p>
 
 ## Installation
 
@@ -130,6 +135,10 @@ of this repository) that computes value and gradient in one pass, so its
 forward and forward+backward times coincide.
 Numbers are specific to this machine.
 
+
+
+<p align="center"><img src="https://raw.githubusercontent.com/lifeiteng/Flash-SoftDTW/main/docs/images/speedup.png" width="92%" alt="Speedup chart"></p>
+
 **Dense, `T = S`** (milliseconds):
 
 | B | T = S | Flash fwd | Baseline fwd | Speedup | Flash fwd+bwd | Baseline fwd+bwd | Speedup |
@@ -170,6 +179,8 @@ python benchmarks/long_sequences.py --gamma 0.1                                 
 ```
 
 ## How it works
+
+<p align="center"><img src="https://raw.githubusercontent.com/lifeiteng/Flash-SoftDTW/main/docs/images/wavefront.png" width="92%" alt="Skewed-strip wavefront"></p>
 
 Rows of a problem are cut into strips of `P` rows with one thread per row.
 Inside a strip, thread `k` processes column `j = jbase + t − k` at tick `t`,
@@ -227,4 +238,4 @@ soft-DTW papers:
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE).
+Apache License 2.0. See [LICENSE](https://github.com/lifeiteng/Flash-SoftDTW/blob/main/LICENSE).

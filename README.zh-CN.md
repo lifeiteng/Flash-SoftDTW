@@ -1,8 +1,10 @@
 # Flash-SoftDTW
 
+![Flash-SoftDTW](https://raw.githubusercontent.com/lifeiteng/Flash-SoftDTW/main/docs/images/banner.jpg)
+
 **面向 PyTorch 的高速、低显存、精确 soft-DTW 实现——支持 CUDA 与 CPU、稠密与带状（banded）对齐、前向与反向传播。**
 
-[English](README.md)
+[English](https://github.com/lifeiteng/Flash-SoftDTW/blob/main/README.md)
 
 Flash-SoftDTW 用于计算成批代价矩阵（cost matrices）的软动态时间规整（soft-DTW）值及其精确梯度（即期望对齐矩阵）。它专为训练场景设计：原生支持变长 batch、Sakoe-Chiba 带（band）、规整惩罚（warp penalty）、fp16 / bf16 输入以及任意步幅（stride），且 kernel 全程最多只实例化一个 `[B, T, S]` 缓冲区。
 
@@ -12,6 +14,9 @@ Flash-SoftDTW 用于计算成批代价矩阵（cost matrices）的软动态时�
 - **带状对齐紧凑存储。** 传入 `[B, T, 2]` 的 band 和 `[B, T, W]` 的代价张量后，内存开销仅随带宽 `W` 而非 `S` 增长，且只计算带内单元。
 - **精确且测试完备。** 包含约 600 个测试用例（CPU 加两块 GPU），与独立的 float64 参考实现对齐：涵盖数值、梯度、`torch.autograd.gradcheck`、CPU/CUDA 一致性、对比 `pyts` 的 band 构建、不变性（置换、padding、`gamma → 0` 收敛至硬 DTW）、half / bfloat16 以及非连续输入。
 - **数值稳健。** 采用以 2 为底的 log-sum-exp 并以有限哨兵值代替 `inf`（避免 `inf - inf` 产生 NaN）；反向传播直接对前驱权重做归一化，而非使用在小 `gamma` 下会损失精度的 `R - cost`。
+
+<p align="center"><img src="https://raw.githubusercontent.com/lifeiteng/Flash-SoftDTW/main/docs/images/soft_alignment.png" width="92%" alt="Flash-SoftDTW 计算的软对齐"></p>
+<p align="center"><sub>两条存在时间扭曲的信号的期望对齐（soft-DTW 对代价矩阵的梯度）：左为稠密，右为 Sakoe-Chiba 带内。</sub></p>
 
 ## 安装
 
@@ -91,6 +96,8 @@ band 的列范围沿 `T` 维必须非递减（Sakoe-Chiba 带以及任何单调�
 
 测试环境：RTX PRO 6000 Blackwell Max-Q (sm_120)，PyTorch 2.13 + CUDA 12.9，fp32，`gamma = 0.05`，`warp_penalty = 10`。使用 CUDA Event 计时，预热后取 10 次运行的中位数，期间 GPU 无其他负载。不含代价矩阵构建时间。Baseline 为早期的逐行顺序 CUDA soft-DTW 实现（不包含在本仓库中），在单次扫描中同时计算函数值与梯度，因此其前向耗时与前向+反向耗时相同。具体数值取决于测试机型。
 
+<p align="center"><img src="https://raw.githubusercontent.com/lifeiteng/Flash-SoftDTW/main/docs/images/speedup.png" width="92%" alt="加速比"></p>
+
 **稠密场景，`T = S`**（单位：毫秒）：
 
 | B | T = S | Flash fwd | Baseline fwd | Speedup | Flash fwd+bwd | Baseline fwd+bwd | Speedup |
@@ -126,6 +133,8 @@ python benchmarks/long_sequences.py --gamma 0.1                                 
 ```
 
 ## 工作原理
+
+<p align="center"><img src="https://raw.githubusercontent.com/lifeiteng/Flash-SoftDTW/main/docs/images/wavefront.png" width="92%" alt="倾斜条带波前"></p>
 
 每个问题的行被切分为高度为 `P` 的条带（strip），每行分配一个线程。在条带内部，线程 `k` 在时间步（tick）`t` 处理列 `j = jbase + t − k`，因此每个单元的三个 DP 前驱都由同一线程或线程 `k − 1` 在 1 或 2 个 tick 之前算得：
 
@@ -171,4 +180,4 @@ python -m pytest -q
 
 ## 许可证
 
-Apache License 2.0。详见 [LICENSE](LICENSE)。
+Apache License 2.0。详见 [LICENSE](https://github.com/lifeiteng/Flash-SoftDTW/blob/main/LICENSE)。
