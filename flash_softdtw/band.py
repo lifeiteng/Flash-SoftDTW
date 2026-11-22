@@ -4,12 +4,15 @@
 from __future__ import annotations
 
 import math
+from typing import Optional
 
 import torch
 from torch import Tensor
 
 
-def sakoe_chiba_band(x_lens: Tensor, y_lens: Tensor, window: float) -> Tensor:
+def sakoe_chiba_band(
+    x_lens: Tensor, y_lens: Tensor, window: float, max_len: Optional[int] = None
+) -> Tensor:
     """Sakoe-Chiba band along the (possibly non-square) diagonal.
 
     Row ``i`` of element ``b`` keeps the columns within ``window`` steps of the
@@ -21,17 +24,23 @@ def sakoe_chiba_band(x_lens: Tensor, y_lens: Tensor, window: float) -> Tensor:
         x_lens: ``[B]`` integer lengths of the first sequences.
         y_lens: ``[B]`` integer lengths of the second sequences.
         window: half width of the band, in steps of the longer sequence.
+        max_len: number of rows ``T`` of the result (the padded length of the
+            first sequences). Defaults to ``max(x_lens)``, which needs a
+            device-to-host synchronization; pass it to avoid that.
 
     Returns:
-        ``[B, max(x_lens), 2]`` int32 tensor of ``[begin, end)`` columns. Rows
-        beyond ``x_lens[b]`` are filled but never read.
+        ``[B, T, 2]`` int32 tensor of ``[begin, end)`` columns. Rows beyond
+        ``x_lens[b]`` are filled but never read.
     """
     if window < 0:
         raise ValueError("window must be non-negative")
     device = x_lens.device
     n = x_lens.to(torch.float64)
     m = y_lens.to(device=device, dtype=torch.float64)
-    T = int(x_lens.max().item()) if x_lens.numel() else 0
+    if max_len is not None:
+        T = int(max_len)
+    else:
+        T = int(x_lens.max().item()) if x_lens.numel() else 0
     # Slope of the diagonal; a single row sees every column.
     slope = torch.where(n > 1, (m - 1) / (n - 1).clamp_min(1), torch.full_like(n, math.inf))
     tall = m > n  # more columns than rows

@@ -143,3 +143,50 @@ def test_pairwise_l1_matches_cdist(device, channels, monkeypatch):
     torch.testing.assert_close(gy, ry)
     assert torch.autograd.gradcheck(lambda a, b: fsd.pairwise_cost(a, b, "l1"),
                                     (x.detach().requires_grad_(), y.detach().requires_grad_()))
+
+
+def test_negative_costs_cannot_revive_unreachable_cells(device):
+    # The start cell is outside the band, so nothing is reachable no matter
+    # how negative the costs are.
+    cost = torch.full((1, 3, 3), -1e35, device=device, requires_grad=True)
+    begin = torch.ones(1, 3, dtype=torch.int32, device=device)
+    end = torch.full((1, 3), 3, dtype=torch.int32, device=device)
+    value = fsd.soft_dtw(cost, torch.tensor([3], device=device), torch.tensor([3], device=device),
+                         band=(begin, end), gamma=1.0)
+    assert torch.isinf(value).all() and (value > 0).all()
+    grad, = torch.autograd.grad(value.sum(), cost)
+    assert torch.count_nonzero(grad) == 0
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_half_banded_euclidean_zero_distance_has_finite_gradient(device, dtype):
+    x = torch.zeros(1, 4, 3, device=device, dtype=dtype, requires_grad=True)
+    y = torch.zeros(1, 5, 3, device=device, dtype=dtype)
+    loss = fsd.SoftDTWLoss(gamma=0.5, metric="euclidean", window=2)(x, y)
+    loss.backward()
+    assert torch.isfinite(x.grad).all()
+
+
+def test_band_max_len_matches_default(device):
+    x_lens = torch.tensor([5, 3], device=device)
+    y_lens = torch.tensor([7, 4], device=device)
+    default = fsd.sakoe_chiba_band(x_lens, y_lens, 2)
+    padded = fsd.sakoe_chiba_band(x_lens, y_lens, 2, max_len=8)
+    assert padded.shape == (2, 8, 2)
+    torch.testing.assert_close(padded[:, :5], default)
+
+
+def test_input_validation_raises_value_errors():
+    cost = torch.rand(1, 3, 3)
+    with pytest.raises(ValueError):
+        fsd.soft_dtw(cost, gamma=math.inf)
+    with pytest.raises(ValueError):
+        fsd.soft_dtw(cost, warp_penalty=math.nan)
+    with pytest.raises(TypeError):
+        fsd.soft_dtw(cost, torch.tensor([3.0]))
+    with pytest.raises(ValueError):
+        fsd.SoftDTWLoss(gamma=0.0)
+    with pytest.raises(ValueError):
+        fsd.SoftDTWLoss(metric="manhattan")
+    with pytest.raises(ValueError):
+        fsd.pairwise_cost(torch.rand(3, 2), torch.rand(4, 2))

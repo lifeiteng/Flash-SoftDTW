@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Callable, Optional, Union
 
 import torch
@@ -15,6 +16,7 @@ Metric = Union[str, Callable[[Tensor, Tensor], Tensor]]
 
 _REDUCTIONS = ("none", "mean", "sum")
 _COS_EPS = 1e-12
+_METRICS = ("sqeuclidean", "euclidean", "l1", "cosine")
 
 
 def _cosine(x: Tensor, y: Tensor) -> Tensor:
@@ -118,8 +120,10 @@ def _banded_cost(x: Tensor, y: Tensor, band: Tensor, width: int, metric: Metric)
         return (xb - yb).pow(2).sum(-1)
     if metric == "euclidean":
         sq = (xb - yb).pow(2).sum(-1)
-        # Exact zero distance (matches torch.cdist) without a 0/0 gradient.
-        return torch.where(sq > 0, sq.clamp_min(1e-30).sqrt(), torch.zeros_like(sq))
+        # Exact zero distance (matches torch.cdist) without a 0/0 gradient: the
+        # masked branch takes sqrt(1), which is safe in every precision.
+        pos = sq > 0
+        return torch.where(pos, torch.where(pos, sq, torch.ones_like(sq)).sqrt(), torch.zeros_like(sq))
     if metric == "l1":
         return (xb - yb).abs().sum(-1)
     if metric == "cosine":
@@ -142,6 +146,12 @@ def pairwise_cost(
     ``"sqeuclidean"``, ``"euclidean"``, ``"l1"``, ``"cosine"`` or a callable
     mapping broadcastable ``[..., C]`` tensors to ``[...]`` costs.
     """
+    if x.dim() != 3 or y.dim() != 3 or x.size(0) != y.size(0) or x.size(2) != y.size(2):
+        raise ValueError(
+            f"x and y must be [B, T, C] and [B, S, C], got {tuple(x.shape)} and {tuple(y.shape)}"
+        )
+    if not callable(metric) and metric not in _METRICS:
+        raise ValueError(f"unknown metric {metric!r}; expected one of {_METRICS} or a callable")
     if band is None:
         return _dense_cost(x, y, metric)
     if width is None:
@@ -176,6 +186,14 @@ class SoftDTWLoss(nn.Module):
         super().__init__()
         if reduction not in _REDUCTIONS:
             raise ValueError(f"reduction must be one of {_REDUCTIONS}")
+        if not (math.isfinite(gamma) and gamma > 0):
+            raise ValueError("gamma must be finite and positive")
+        if not math.isfinite(warp_penalty):
+            raise ValueError("warp_penalty must be finite")
+        if window is not None and window < 0:
+            raise ValueError("window must be non-negative")
+        if not callable(metric) and metric not in _METRICS:
+            raise ValueError(f"unknown metric {metric!r}; expected one of {_METRICS} or a callable")
         if normalize and window is not None:
             raise ValueError("normalize=True requires window=None (full alignment)")
         self.gamma = float(gamma)
@@ -191,8 +209,8 @@ class SoftDTWLoss(nn.Module):
             return soft_dtw(
                 cost, x_lens, y_lens, gamma=self.gamma, warp_penalty=self.warp_penalty
             )
-        band = sakoe_chiba_band(x_lens, y_lens, self.window)
-        cost = pairwise_cost(x[:, : band.size(1)], y, self.metric, band=band)
+        band = sakoe_chiba_band(x_lens, y_lens, self.window, max_len=x.size(1))
+        cost = pairwise_cost(x, y, self.metric, band=band)
         return soft_dtw(
             cost,
             x_lens,

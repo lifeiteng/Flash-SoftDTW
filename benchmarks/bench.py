@@ -89,7 +89,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--batches", default="1,8,64,256")
-    parser.add_argument("--lengths", default="128,256,512,1024")
+    parser.add_argument("--lengths", default="128,256,512,1024",
+                        help="dense T = S values; empty to skip the dense grid")
     parser.add_argument("--band", default="256x400x600x16",
                         help="banded case BxTxSxWINDOW (variable lengths); empty to skip")
     parser.add_argument("--gamma", type=float, default=0.1)
@@ -109,8 +110,10 @@ def main():
     if args.band:
         B, T, S, W = map(int, args.band.split("x"))
         rows.append(run(f"band B={B} T<={T} S<={S} w={W}", *make_banded(B, T, S, W, gen), args))
-    for B in map(int, args.batches.split(",")):
-        for T in map(int, args.lengths.split(",")):
+    batches = [int(v) for v in args.batches.split(",") if v]
+    lengths = [int(v) for v in args.lengths.split(",") if v]
+    for B in batches:
+        for T in lengths:
             rows.append(run(f"dense B={B} T=S={T}", *make_dense(B, T, gen), args))
             torch.cuda.empty_cache()
     if args.json:

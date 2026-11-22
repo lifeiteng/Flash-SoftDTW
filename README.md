@@ -108,10 +108,10 @@ band or the stored tensor, the value is `+inf` and the gradient is zero.
 
 | Function | Description |
 |---|---|
-| `soft_dtw(cost, x_lens=None, y_lens=None, *, band=None, gamma=1.0, warp_penalty=0.0)` | Differentiable soft-DTW values `[B]` of `[B, T, S]` (dense) or `[B, T, W]` (compact band) costs. Any float dtype; half / bf16 accumulate in fp32. |
-| `SoftDTWLoss(gamma, metric, window, warp_penalty, normalize, reduction)` | `nn.Module` taking feature sequences `x [B, T, C]`, `y [B, S, C]` and optional lengths. |
-| `pairwise_cost(x, y, metric, band=None)` | `"sqeuclidean"`, `"euclidean"`, `"l1"`, `"cosine"` or a callable; dense or compact band layout. `"sqeuclidean"` / `"cosine"` use matrix multiplies; `"l1"` uses a dedicated broadcast kernel pair (not `torch.cdist`), whose cost grows with the feature dimension, so prefer `"sqeuclidean"` for wide features. |
-| `sakoe_chiba_band(x_lens, y_lens, window)` | Per-row `[begin, end)` columns of a Sakoe-Chiba band along the (non-square) diagonal. |
+| `soft_dtw(cost, x_lens=None, y_lens=None, *, band=None, gamma=1.0, warp_penalty=0.0, rows_per_block=0)` | Differentiable soft-DTW values `[B]` of `[B, T, S]` (dense) or `[B, T, W]` (compact band) costs. Any float dtype; half / bf16 accumulate in fp32 and return fp32 values. `rows_per_block` overrides the CUDA strip height (0 = auto). |
+| `SoftDTWLoss(gamma=1.0, metric="sqeuclidean", window=None, warp_penalty=0.0, normalize=False, reduction="mean")` | `nn.Module` taking feature sequences `x [B, T, C]`, `y [B, S, C]` and optional lengths. `normalize=True` (soft-DTW divergence) requires `window=None`. |
+| `pairwise_cost(x, y, metric="sqeuclidean", band=None, width=None)` | `"sqeuclidean"`, `"euclidean"`, `"l1"`, `"cosine"` or a callable; dense or compact band layout. `"sqeuclidean"` / `"cosine"` use matrix multiplies; `"l1"` uses a dedicated broadcast kernel pair (not `torch.cdist`), whose cost grows with the feature dimension, so prefer `"sqeuclidean"` for wide features. |
+| `sakoe_chiba_band(x_lens, y_lens, window, max_len=None)` | Per-row `[begin, end)` columns of a Sakoe-Chiba band along the (non-square) diagonal, shape `[B, max_len, 2]`; pass `max_len` (the padded `T`) to avoid a device sync. |
 | `band_width`, `band_columns`, `gather_band` | Helpers for compact band storage. |
 
 Bands must be non-decreasing along `T` (true for Sakoe-Chiba and any monotone
@@ -161,8 +161,13 @@ boosted).
 | 8 | 4096 | 14.0 ms | 66.3 ms | 1.0 GiB |
 | 64 | 4096 | 15.2 ms | 72.2 ms | 8.0 GiB |
 
-`python benchmarks/bench.py` and `python benchmarks/long_sequences.py`
-reproduce the Flash-SoftDTW side of these tables on your GPU.
+The Flash-SoftDTW side of these tables is reproduced on your GPU by:
+
+```bash
+python benchmarks/bench.py --gamma 0.05 --warp-penalty 10 --band ""            # dense table
+python benchmarks/bench.py --gamma 0.1 --warp-penalty 1 --band 512x64x160x4 --lengths ""  # narrow band
+python benchmarks/long_sequences.py --gamma 0.1                                  # long sequences
+```
 
 ## How it works
 

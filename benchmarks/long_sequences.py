@@ -28,6 +28,7 @@ def main():
     parser.add_argument("--cases", default="1x2048,8x2048,1x4096,8x4096,64x4096",
                         help="comma-separated BxL list")
     parser.add_argument("--gamma", type=float, default=0.1)
+    parser.add_argument("--warp-penalty", type=float, default=0.0)
     parser.add_argument("--repeats", type=int, default=10)
     args = parser.parse_args()
     print(f"{torch.cuda.get_device_name()} | torch {torch.__version__} | CUDA {torch.version.cuda}")
@@ -40,10 +41,10 @@ def main():
 
         def forward():
             with torch.no_grad():
-                fsd.soft_dtw(cost, gamma=args.gamma)
+                fsd.soft_dtw(cost, gamma=args.gamma, warp_penalty=args.warp_penalty)
 
         def forward_backward():
-            value = fsd.soft_dtw(leaf, gamma=args.gamma)
+            value = fsd.soft_dtw(leaf, gamma=args.gamma, warp_penalty=args.warp_penalty)
             torch.autograd.grad(value.sum(), leaf)
 
         fwd = timed(forward, args.repeats)

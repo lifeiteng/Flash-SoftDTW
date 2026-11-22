@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Optional, Tuple, Union
 
 import torch
@@ -19,6 +20,8 @@ def _split_band(band: Optional[Band]) -> Tuple[Optional[Tensor], Optional[Tensor
         return None, None
     if isinstance(band, (tuple, list)):
         begin, end = band
+    elif band.is_floating_point() or band.is_complex():
+        raise TypeError("band must be an integer tensor")
     else:
         if band.dim() != 3 or band.size(-1) != 2:
             raise ValueError("band must have shape [B, T, 2] or be a (begin, end) pair")
@@ -33,6 +36,12 @@ class _SoftDTW(torch.autograd.Function):
             cost, x_lens, y_lens, begin, end, gamma, warp, save_r, rows_per_block
         )
         if save_r:
+            # The CUDA backward never reads the cost values, only its shape and
+            # dtype: keep it out of the graph so it can be freed early.
+            ctx.cost_meta = None
+            if cost.is_cuda:
+                ctx.cost_meta = (cost.shape, cost.dtype, cost.device)
+                cost = None
             ctx.save_for_backward(cost, r, x_lens, y_lens, begin, end)
         ctx.gamma = gamma
         ctx.warp = warp
@@ -43,6 +52,10 @@ class _SoftDTW(torch.autograd.Function):
     @once_differentiable
     def backward(ctx, grad_values):
         cost, r, x_lens, y_lens, begin, end = ctx.saved_tensors
+        if cost is None:
+            shape, dtype, device = ctx.cost_meta
+            # Zero-storage placeholder that carries shape and dtype only.
+            cost = torch.empty((), dtype=dtype, device=device).expand(shape)
         grad = ext().backward(
             cost,
             r,
@@ -106,8 +119,13 @@ def soft_dtw(
     """
     if cost.dim() != 3:
         raise ValueError(f"cost must be 3-D [B, T, S], got shape {tuple(cost.shape)}")
-    if gamma <= 0:
-        raise ValueError("gamma must be positive")
+    if not (math.isfinite(gamma) and gamma > 0):
+        raise ValueError("gamma must be finite and positive")
+    if not math.isfinite(warp_penalty):
+        raise ValueError("warp_penalty must be finite")
+    for name, t in (("x_lens", x_lens), ("y_lens", y_lens)):
+        if t is not None and (t.is_floating_point() or t.is_complex()):
+            raise TypeError(f"{name} must be an integer tensor")
     B, T, S = cost.shape
     begin, end = _split_band(band)
     if x_lens is None:

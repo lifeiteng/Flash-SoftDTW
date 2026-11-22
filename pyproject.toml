@@ -22,7 +22,12 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest", "numpy"]
+test = ["pytest", "numpy", "pyts"]
+
+[project.urls]
+Homepage = "https://github.com/lifeiteng/Flash-SoftDTW"
+Repository = "https://github.com/lifeiteng/Flash-SoftDTW"
+Issues = "https://github.com/lifeiteng/Flash-SoftDTW/issues"
 
 [tool.setuptools]
 packages = ["flash_softdtw"]

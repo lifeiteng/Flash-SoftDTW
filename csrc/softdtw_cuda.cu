@@ -286,12 +286,15 @@ softdtw_forward_kernel(const Params<acc_t> p) {
         prev_up = up;
 
         const bool active = (j >= lo) && (j < hi);
+        // A cell is reachable only through a reachable predecessor: without
+        // this, a huge negative cost could pull BIG back below the threshold.
+        const acc_t pmin = fmin(diag, fmin(up + wp, v1 + wp));
+        const bool reach = active && (pmin < Sentinel<acc_t>::reachable_below);
         const acc_t val =
-            active ? fmin(cbuf[u] + softmin3_log2(diag, up + wp, v1 + wp), BIG) : BIG;
+            reach ? fmin(cbuf[u] + softmin3_log2(diag, up + wp, v1 + wp), BIG) : BIG;
         if (active) {
           if (kStoreR) rmat[static_cast<int64_t>(i) * p.W + (j - off)] = val;
-          if (i == T - 1 && j == S - 1)
-            p.values[b] = val < Sentinel<acc_t>::reachable_below ? val * to_nat : INF;
+          if (i == T - 1 && j == S - 1) p.values[b] = reach && val < BIG ? val * to_nat : INF;
           if (k == last_lane && i + 1 < T) edge[j - off] = val;
         }
         if (kMultiWarp) {

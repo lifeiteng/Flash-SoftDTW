@@ -79,10 +79,10 @@ softmin_γ(a, b, c) = -γ · log(e^{-a/γ} + e^{-b/γ} + e^{-c/γ})
 
 | 函数 | 说明 |
 |---|---|
-| `soft_dtw(cost, x_lens=None, y_lens=None, *, band=None, gamma=1.0, warp_penalty=0.0)` | 对 `[B, T, S]`（稠密）或 `[B, T, W]`（紧凑带状）代价张量计算可微的 soft-DTW 值 `[B]`。支持任意浮点 dtype；half / bf16 在内部以 fp32 累加。 |
-| `SoftDTWLoss(gamma, metric, window, warp_penalty, normalize, reduction)` | `nn.Module`，接收特征序列 `x [B, T, C]`、`y [B, S, C]` 以及可选的序列长度。 |
-| `pairwise_cost(x, y, metric, band=None)` | 支持 `"sqeuclidean"`、`"euclidean"`、`"l1"`、`"cosine"` 或自定义可调用对象；支持稠密或紧凑带状布局。`"sqeuclidean"` / `"cosine"` 基于矩阵乘法；`"l1"` 使用专门的广播实现（不走 `torch.cdist`），耗时随特征维度增长，特征维度较大时建议用 `"sqeuclidean"`。 |
-| `sakoe_chiba_band(x_lens, y_lens, window)` | 生成沿（非方阵）对角线的 Sakoe-Chiba 带中每一行的 `[begin, end)` 列范围。 |
+| `soft_dtw(cost, x_lens=None, y_lens=None, *, band=None, gamma=1.0, warp_penalty=0.0, rows_per_block=0)` | 对 `[B, T, S]`（稠密）或 `[B, T, W]`（紧凑带状）代价张量计算可微的 soft-DTW 值 `[B]`。支持任意浮点 dtype；half / bf16 在内部以 fp32 累加，返回 fp32 值。`rows_per_block` 用于手动指定 CUDA 条带高度（0 表示自动）。 |
+| `SoftDTWLoss(gamma=1.0, metric="sqeuclidean", window=None, warp_penalty=0.0, normalize=False, reduction="mean")` | `nn.Module`，接收特征序列 `x [B, T, C]`、`y [B, S, C]` 以及可选的序列长度。`normalize=True`（soft-DTW 散度）要求 `window=None`。 |
+| `pairwise_cost(x, y, metric="sqeuclidean", band=None, width=None)` | 支持 `"sqeuclidean"`、`"euclidean"`、`"l1"`、`"cosine"` 或自定义可调用对象；支持稠密或紧凑带状布局。`"sqeuclidean"` / `"cosine"` 基于矩阵乘法；`"l1"` 使用专门的广播实现（不走 `torch.cdist`），耗时随特征维度增长，特征维度较大时建议用 `"sqeuclidean"`。 |
+| `sakoe_chiba_band(x_lens, y_lens, window, max_len=None)` | 生成沿（非方阵）对角线的 Sakoe-Chiba 带中每一行的 `[begin, end)` 列范围，形状为 `[B, max_len, 2]`；传入 `max_len`（padding 后的 `T`）可避免一次设备同步。 |
 | `band_width`, `band_columns`, `gather_band` | 用于紧凑带状存储的辅助函数。 |
 
 band 的列范围沿 `T` 维必须非递减（Sakoe-Chiba 带以及任何单调规整窗口均满足此条件）。支持一阶梯度。代价为 `+inf` 的单元视为障碍。内部数值以 `1 / gamma` 缩放后的 base-2 单位表示；在该单位下数值需保持在 `1e29` 以下（float32；float64 下为 `1e299`），仅在极端的 `gamma` 与代价值组合下才需注意。
@@ -117,7 +117,13 @@ band 的列范围沿 `T` 维必须非递减（Sakoe-Chiba 带以及任何单调�
 | 8 | 4096 | 14.0 ms | 66.3 ms | 1.0 GiB |
 | 64 | 4096 | 15.2 ms | 72.2 ms | 8.0 GiB |
 
-`python benchmarks/bench.py` 与 `python benchmarks/long_sequences.py` 可在你的 GPU 上复现上表中 Flash-SoftDTW 一侧的结果。
+在你的 GPU 上复现上表中 Flash-SoftDTW 一侧的结果：
+
+```bash
+python benchmarks/bench.py --gamma 0.05 --warp-penalty 10 --band ""            # dense table
+python benchmarks/bench.py --gamma 0.1 --warp-penalty 1 --band 512x64x160x4 --lengths ""  # narrow band
+python benchmarks/long_sequences.py --gamma 0.1                                  # long sequences
+```
 
 ## 工作原理
 
