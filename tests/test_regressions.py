@@ -190,3 +190,62 @@ def test_input_validation_raises_value_errors():
         fsd.SoftDTWLoss(metric="manhattan")
     with pytest.raises(ValueError):
         fsd.pairwise_cost(torch.rand(3, 2), torch.rand(4, 2))
+
+
+def _fp32_cuda_errors(cost, x_lens, y_lens, band, gamma, warp):
+    """Max relative value error and max absolute gradient error of float32 CUDA vs float64 CPU."""
+    results = []
+    for dtype, device in ((torch.float64, "cpu"), (torch.float32, "cuda")):
+        leaf = cost.to(device=device, dtype=dtype).requires_grad_()
+        value = fsd.soft_dtw(leaf, x_lens.to(device), y_lens.to(device),
+                             band=None if band is None else band.to(device), gamma=gamma,
+                             warp_penalty=warp)
+        grad, = torch.autograd.grad(value.sum(), leaf)
+        results.append((value.detach().cpu().double(), grad.cpu().double()))
+    (v64, g64), (v32, g32) = results
+    assert torch.isfinite(v64).all() and torch.isfinite(g32).all()
+    return ((v32 - v64).abs() / v64.abs()).max().item(), (g32 - g64).abs().max().item()
+
+
+def _large_dense_case():
+    gen = torch.Generator().manual_seed(1024)
+    cost = torch.rand(4, 1024, 1024, generator=gen, dtype=torch.float64)
+    lens = torch.full((4,), 1024, dtype=torch.int32)
+    return cost, lens, lens, None
+
+
+def _large_banded_case():
+    gen = torch.Generator().manual_seed(600)
+    x_lens = torch.randint(300, 601, (16,), generator=gen, dtype=torch.int32)
+    y_lens = torch.randint(400, 801, (16,), generator=gen, dtype=torch.int32)
+    x_lens[0], y_lens[0] = 600, 800
+    band = fsd.sakoe_chiba_band(x_lens, y_lens, 16)
+    cost = torch.rand(16, 600, fsd.band_width(band), generator=gen, dtype=torch.float64)
+    return cost, x_lens, y_lens, band
+
+
+# Bounds are about 3x the errors measured on an RTX PRO 6000 (float32 CUDA vs float64 CPU; the
+# results are deterministic), so they flag precision regressions beyond ~3x in the accumulation
+# order or the normalized-weight backward. Banded errors are larger because |R| / gamma reaches
+# ~8e4 there; float32 on the CPU shows the same magnitude. A row-sequential float32 kernel with
+# an incorrect banded variable-length gradient fails the banded cases (gradient error 1.0).
+FP32_BOUNDS = {
+    # (case, gamma, warp): (max relative value error, max absolute gradient error)
+    ("dense", 0.05, 10.0): (2.5e-6, 3e-4),   # measured 7.9e-7, 1.25e-4
+    ("dense", 0.01, 1.0): (1.5e-6, 1.5e-3),  # measured 3.9e-7, 5.4e-4
+    ("dense", 1.0, 0.0): (1.5e-6, 1.5e-4),   # measured 3.9e-7, 4.7e-5
+    ("banded", 0.05, 10.0): (4e-6, 2e-2),    # measured 1.1e-6, 7.3e-3
+    ("banded", 0.01, 1.0): (1.5e-5, 3e-3),   # measured 4.4e-6, 1.1e-3
+    ("banded", 1.0, 0.0): (2e-6, 8e-5),      # measured 6.1e-7, 2.7e-5
+}
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
+@pytest.mark.parametrize("case, gamma, warp", list(FP32_BOUNDS))
+def test_large_fp32_cuda_accuracy_vs_fp64(case, gamma, warp):
+    """Float32 CUDA error vs float64 on 1024^2 dense and long variable-length banded problems."""
+    problem = _large_dense_case() if case == "dense" else _large_banded_case()
+    value_error, grad_error = _fp32_cuda_errors(*problem, gamma, warp)
+    value_bound, grad_bound = FP32_BOUNDS[(case, gamma, warp)]
+    assert value_error < value_bound, f"value relative error {value_error:.3g} >= {value_bound}"
+    assert grad_error < grad_bound, f"gradient error {grad_error:.3g} >= {grad_bound}"
