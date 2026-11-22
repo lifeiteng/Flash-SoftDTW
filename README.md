@@ -45,7 +45,29 @@ CUDA toolkit matching your PyTorch build for the GPU kernels.
 
 The PyPI package is `flash-softdtw-torch` (import name `flash_softdtw`). It
 is unrelated to the `flash-softdtw` package on PyPI; do not install both into
-one environment, as they share the import name. To build from source:
+one environment, as they share the import name.
+
+**From PyPI** (source distribution, compiled on install). Install PyTorch
+first, then:
+
+```bash
+pip install flash-softdtw-torch --no-build-isolation
+```
+
+`--no-build-isolation` lets the build see your installed PyTorch (the
+extension is compiled against it). The CUDA kernels are built when PyTorch has
+CUDA and a CUDA toolkit is found (set `CUDA_HOME` if `nvcc` is not on `PATH`); `TORCH_CUDA_ARCH_LIST` picks
+the target GPUs and `MAX_JOBS` bounds compile parallelism:
+
+```bash
+CUDA_HOME=/usr/local/cuda TORCH_CUDA_ARCH_LIST="8.0;8.9;9.0;12.0" MAX_JOBS=4 \
+  pip install flash-softdtw-torch --no-build-isolation
+```
+
+If a PyPI mirror has not synced the latest release yet, add
+`--index-url https://pypi.org/simple`.
+
+**From source:**
 
 ```bash
 git clone https://github.com/lifeiteng/Flash-SoftDTW.git

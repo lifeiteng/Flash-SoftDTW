@@ -22,7 +22,24 @@ Flash-SoftDTW 用于计算成批代价矩阵（cost matrices）的软动态时�
 
 环境要求：PyTorch（已在 2.13 + CUDA 12.9 与 2.15 CPU 上测试）、`ninja`、`setuptools >= 77`、PyTorch 构建所支持的 C++ 编译器；编译 GPU kernel 还需与 PyTorch 构建版本匹配的 CUDA Toolkit。
 
-PyPI 包名为 `flash-softdtw-torch`（import 名为 `flash_softdtw`），与 PyPI 上的 `flash-softdtw` 包无关；两者 import 名相同，请勿安装在同一环境中。从源码编译安装：
+PyPI 包名为 `flash-softdtw-torch`（import 名为 `flash_softdtw`），与 PyPI 上的 `flash-softdtw` 包无关；两者 import 名相同，请勿安装在同一环境中。
+
+**从 PyPI 安装**（源码包，安装时编译）。先安装 PyTorch，然后：
+
+```bash
+pip install flash-softdtw-torch --no-build-isolation
+```
+
+`--no-build-isolation` 让构建过程使用你已安装的 PyTorch（扩展需要针对它编译）。PyTorch 带 CUDA 且找到 CUDA Toolkit 时会编译 CUDA kernel（`nvcc` 不在 `PATH` 中时请设置 `CUDA_HOME`）；`TORCH_CUDA_ARCH_LIST` 指定目标 GPU 架构，`MAX_JOBS` 限制编译并发：
+
+```bash
+CUDA_HOME=/usr/local/cuda TORCH_CUDA_ARCH_LIST="8.0;8.9;9.0;12.0" MAX_JOBS=4 \
+  pip install flash-softdtw-torch --no-build-isolation
+```
+
+国内镜像（如清华源）可能尚未同步最新版本，此时可加 `--index-url https://pypi.org/simple` 直接从官方源安装。
+
+**从源码安装：**
 
 ```bash
 git clone https://github.com/lifeiteng/Flash-SoftDTW.git
